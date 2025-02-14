@@ -3,8 +3,7 @@
 /* eslint-disable react/forbid-prop-types */
 /* eslint-disable react/static-property-placement */
 import React from 'react';
-import { withRouter } from 'react-router-dom';
-import PropTypes from 'prop-types';
+import { withRouter, RouteComponentProps } from 'react-router-dom';
 
 import LoadingSkeleton from 'renderer/components/loading/LoadingSkeleton';
 import serverIcon from 'renderer/assets/hardware/server.svg';
@@ -23,6 +22,7 @@ import { faTrash, faPen, faSync } from '@fortawesome/free-solid-svg-icons';
 const statusColorMap: { [key: string]: string } = {
   active: '#00ff88',
   'access denied': 'rgb(226, 178, 19)',
+  'incompatible API': 'rgb(226, 178, 19)',
   down: '#ff001e',
 };
 
@@ -32,17 +32,15 @@ const icons: { [key: string]: string } = {
   laptop: phoneIcon,
 };
 
-interface Props {
+interface Props extends RouteComponentProps {
   data: any;
   id: string;
   listRefresh: () => void;
-  location: any;
-  match: any;
-  history: any;
 }
 
 interface State {
   isLoading: boolean;
+  bearer: string;
   response: any;
   showMenu: boolean;
 }
@@ -52,25 +50,28 @@ class Server extends React.Component<Props, State> {
 
   editModal: HandlerToken | undefined;
 
-  static propTypes = {
-    history: PropTypes.object.isRequired,
-  };
-
   constructor(props: Props) {
     super(props);
     this.state = {
       isLoading: true,
+      bearer: '',
       response: null,
       showMenu: false,
     };
 
     this.fetchData = this.fetchData.bind(this);
+    this.fetchBearer = this.fetchBearer.bind(this);
   }
 
   componentDidMount() {
     this.delModal = ModalHandler.push(DelDeviceModal, this);
     this.editModal = ModalHandler.push(EditDeviceModal, this);
-    this.fetchData();
+
+    this.fetchBearer()
+      .then(this.fetchData)
+      .catch(() => {
+        console.debug('Bearer fetch failed');
+      });
   }
 
   getId(): string {
@@ -83,11 +84,22 @@ class Server extends React.Component<Props, State> {
     return data;
   }
 
+  /**
+   * Fetches the data from the server using the bearer token.
+   */
   fetchData() {
     const { data } = this.props;
-    const url = `http://${data.ip}:${data.port}/${data.auth}/status-compact`;
+    const { bearer } = this.state;
+    const url = `http://${data.ip}:${data.port}/status-compact`;
+
+    const options = {
+      method: 'GET',
+      headers: new Headers({ authorization: `Bearer ${bearer}` }),
+    };
     this.setState({ isLoading: true });
-    fetch(url)
+
+    // try fetching using the current bearer token
+    fetch(url, options)
       .then((response) => response.json())
       .then((response) => {
         this.setState({ response, isLoading: false });
@@ -95,6 +107,31 @@ class Server extends React.Component<Props, State> {
       })
       .catch(() => {
         this.setState({ response: 'none', isLoading: false });
+      });
+  }
+
+  /**
+   * Fetches the bearer token from the server.
+   */
+  async fetchBearer() {
+    const { data } = this.props;
+    const url = `http://${data.ip}:${data.port}/authenticate/jwt`;
+    const options = {
+      method: 'POST',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      body: JSON.stringify({
+        auth: data.auth,
+      }),
+    };
+
+    return fetch(url, options)
+      .then((response) => response.json())
+      .then((response) => {
+        this.setState({ bearer: response.bearer });
+        return response;
+      })
+      .catch(() => {
+        this.setState({ bearer: '' });
       });
   }
 
@@ -115,22 +152,23 @@ class Server extends React.Component<Props, State> {
             textTransform: 'uppercase',
           }}
         >
-          {response.data.name}
+          {response.data?.name}
         </div>
         <div>
           status :{' '}
           <span
             style={{
-              color: statusColorMap[response.data.status],
+              color:
+                statusColorMap[response.data?.status || 'incompatible API'],
               fontWeight: 'bold',
             }}
           >
-            {response.data.status}
+            {response.data?.status ? response.data.status : 'incompatible API'}
           </span>
         </div>
         <div>
           operating system :&nbsp;
-          {response.data.os ? (
+          {response.data?.os ? (
             <>
               {response.data.os.type}&nbsp;
               {response.data.os.architecture}&nbsp;build&nbsp;
@@ -246,4 +284,4 @@ class Server extends React.Component<Props, State> {
 }
 
 export default withRouter(Server);
-export { Server };
+export { Server, statusColorMap };

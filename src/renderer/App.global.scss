@@ -6,6 +6,7 @@
 @import './sass/components/tag';
 @import './sass/components/text';
 @import './sass/components/modals';
+@import './sass/components/sectionselector';
 
 @import './sass/layout/wrappers';
 @import './sass/layout/boxes';
@@ -14,6 +15,7 @@
 @import './sass/pages/login';
 @import './sass/pages/serverstats';
 @import './sass/pages/settings';
+@import './sass/pages/thermal';
 
 body {
   font-family: Montserrat;
